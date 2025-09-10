@@ -1,7 +1,14 @@
 using System.Reflection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using LastLinkApi.Application.Commands;
-using LastLinkApi.Domain.Repositories; // Corrigido: Handlers não são necessários aqui
+using System.Text;
+using LastLinkApi.Infrastructure.Data;
+using LastLinkApi.Infrastructure.Repositories;
+using LastLinkApi.Infrastructure.Services;
+using LastLinkApi.Domain.Repositories;
+using LastLinkApi.Application.Handlers;
 using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,7 +32,6 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    // Incluir XML de documentação, se existir
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -33,7 +39,6 @@ builder.Services.AddSwaggerGen(c =>
         c.IncludeXmlComments(xmlPath);
     }
 
-    // JWT Bearer config (mock por enquanto)
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "Autenticação via JWT usando o esquema Bearer. Exemplo: \"Authorization: Bearer {token}\"",
@@ -59,11 +64,49 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// MediatR
-builder.Services.AddMediatR(typeof(CreateAdvanceRequestCommand).Assembly);
+// Database
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Repositório (InMemory por enquanto)
-builder.Services.AddSingleton<IAdvanceRequestRepository, InMemoryAdvanceRequestRepository>();
+// MediatR
+builder.Services.AddMediatR(typeof(CreateAdvanceRequestHandler).Assembly);
+
+// Repositories
+builder.Services.AddScoped<IAdvanceRequestRepository, AdvanceRequestRepository>();
+
+// Services
+builder.Services.AddScoped<JwtService>(provider =>
+{
+    var configuration = provider.GetRequiredService<IConfiguration>();
+    return new JwtService(
+        configuration["Jwt:SecretKey"] ?? "your-super-secure-secret-key-with-at-least-32-characters",
+        configuration["Jwt:Issuer"] ?? "LastLinkApi",
+        configuration["Jwt:Audience"] ?? "LastLinkApi",
+        int.Parse(configuration["Jwt:ExpirationMinutes"] ?? "60")
+    );
+});
+
+// JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+var secretKey = jwtSettings["SecretKey"] ?? "your-super-secure-secret-key-with-at-least-32-characters";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(secretKey)),
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings["Issuer"] ?? "LastLinkApi",
+            ValidateAudience = true,
+            ValidAudience = jwtSettings["Audience"] ?? "LastLinkApi",
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -78,7 +121,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Swagger UI
+// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -90,11 +133,21 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// Ensure database is created
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    context.Database.EnsureCreated();
+}
+
 app.UseHttpsRedirection();
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 
-// Health check endpoint (sem .WithOpenApi no .NET 8)
+// Health endpoint (sem .WithOpenApi no .NET 8)
 app.MapGet("/health", () => new
 {
     status = "healthy",

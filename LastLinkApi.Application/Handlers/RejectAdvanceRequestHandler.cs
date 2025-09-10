@@ -20,7 +20,7 @@ public class RejectAdvanceRequestHandler : IRequestHandler<RejectAdvanceRequestC
         
         if (advanceRequest == null)
         {
-            throw new ArgumentException("Advance request not found");
+            throw new ArgumentException("Solicitação não encontrada");
         }
 
         advanceRequest.Reject();
