@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -16,6 +16,13 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LastLinkApi.Domain\LastLinkApi.Domain.csproj" />
+    <ProjectReference Include="..\LastLinkApi.Application\LastLinkApi.Application.csproj" />
+    <ProjectReference Include="..\LastLinkApi.Infrastructure\LastLinkApi.Infrastructure.csproj" />
+    <ProjectReference Include="..\LastLinkApi.Api\LastLinkApi.Api.csproj" />
   </ItemGroup>
 
 </Project>
