@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -9,9 +9,21 @@ using LastLinkApi.Infrastructure.Repositories;
 using LastLinkApi.Infrastructure.Services;
 using LastLinkApi.Domain.Repositories;
 using LastLinkApi.Application.Handlers;
-using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
+var environment = builder.Environment.EnvironmentName;
+var appName = Assembly.GetExecutingAssembly().GetName().Name ?? "LastLinkApi";
+var appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+
+Console.WriteLine("========================================");
+Console.WriteLine($"🚀 STARTING {appName.ToUpper()}");
+Console.WriteLine("========================================");
+Console.WriteLine($"📦 Application: {appName} v{appVersion}");
+Console.WriteLine($"🌍 Environment: {environment}");
+Console.WriteLine($"⚡ .NET Version: {Environment.Version}");
+Console.WriteLine($"🕒 Started at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+Console.WriteLine($"💻 Machine: {Environment.MachineName}");
+Console.WriteLine("========================================");
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -24,14 +36,15 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "LastLink API",
         Version = "v1",
-        Description = "REST API para gestão de solicitações de antecipação de recebíveis",
+        Description = $"Laslink API",
         Contact = new OpenApiContact
         {
-            Name = "Equipe LastLink",
+            Name = "LastLink Team",
             Email = "dev@lastlink.com"
         }
     });
 
+    // Include XML comments
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -39,9 +52,10 @@ builder.Services.AddSwaggerGen(c =>
         c.IncludeXmlComments(xmlPath);
     }
 
+    // JWT configuration
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "Autenticação via JWT usando o esquema Bearer. Exemplo: \"Authorization: Bearer {token}\"",
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.ApiKey,
@@ -68,14 +82,15 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// MediatR
-builder.Services.AddMediatR(typeof(CreateAdvanceRequestHandler).Assembly);
+// MediatR 
+builder.Services.AddMediatR(cfg => 
+    cfg.RegisterServicesFromAssembly(typeof(CreateAdvanceRequestHandler).Assembly));
 
 // Repositories
 builder.Services.AddScoped<IAdvanceRequestRepository, AdvanceRequestRepository>();
 
-// Services
-builder.Services.AddScoped<JwtService>(provider =>
+// JWT Service
+builder.Services.AddSingleton<JwtService>(provider =>
 {
     var configuration = provider.GetRequiredService<IConfiguration>();
     return new JwtService(
@@ -121,23 +136,33 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "LastLink API v1");
-        c.RoutePrefix = string.Empty;
-        c.DocumentTitle = "LastLink API Swagger";
-    });
-}
+// ========================================
+// CONFIGURAÇÃO DO PIPELINE
+// ========================================
 
-// Ensure database is created
+Console.WriteLine("📋 Configuring Swagger...");
+
+// Swagger (sempre habilitado)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "LastLink API v1");
+    c.RoutePrefix = string.Empty; // Swagger na raiz
+    c.DocumentTitle = $"LastLink API Documentation (.NET 9) - {environment}";
+    c.DisplayRequestDuration();
+    c.EnableDeepLinking();
+    c.EnableFilter();
+});
+
+Console.WriteLine("✅ Swagger configured successfully!");
+
+// Database
+Console.WriteLine("🗄️  Configuring database...");
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     context.Database.EnsureCreated();
+    Console.WriteLine("✅ Database configured successfully!");
 }
 
 app.UseHttpsRedirection();
@@ -147,26 +172,66 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Health endpoint (sem .WithOpenApi no .NET 8)
-app.MapGet("/health", () => new
-{
-    status = "healthy",
+// Health check
+app.MapGet("/health", () => new 
+{ 
+    status = "healthy", 
     timestamp = DateTime.UtcNow,
-    version = "1.0.0",
-    environment = app.Environment.EnvironmentName
-})
-.WithName("HealthCheck")
-.WithTags("Health");
+    version = appVersion,
+    dotnetVersion = "9.0",
+    environment = environment,
+    machineName = Environment.MachineName
+});
 
-// Auth mock endpoint (sem .WithOpenApi no .NET 8)
-app.MapPost("/auth/token", (string userId) =>
+// JWT token generation
+app.MapPost("/auth/token", (JwtService jwtService, string userId) =>
 {
-    var mockToken = Convert.ToBase64String(
-        System.Text.Encoding.UTF8.GetBytes($"mock-token-{userId}-{DateTime.UtcNow:yyyyMMddHHmmss}")
-    );
-    return new { token = mockToken, expiresIn = 3600, userId };
-})
-.WithName("GenerateToken")
-.WithTags("Authentication");
+    var token = jwtService.GenerateToken(userId, "user");
+    return new { token, expiresIn = 3600, userId, environment };
+});
+
+// ========================================
+// STARTUP FINAL
+// ========================================
+
+var urls = builder.Configuration["ASPNETCORE_URLS"] ?? "http://localhost:8080";
+Console.WriteLine($"🌐 URLs: {urls}" );
+
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    Console.WriteLine("========================================");
+    Console.WriteLine("🎉 APPLICATION STARTED SUCCESSFULLY!");
+    Console.WriteLine("========================================");
+    var baseUrl = urls.Replace("0.0.0.0", "localhost").Split(';')[0];
+    Console.WriteLine($"🌐 Swagger UI: {baseUrl}/swagger");
+    Console.WriteLine($"❤️  Health Check: {baseUrl}/health");
+    Console.WriteLine($"🔑 Auth Token: {baseUrl}/auth/token?userId=creator123");
+    Console.WriteLine("========================================");
+    
+    // Abrir Swagger automaticamente em Development
+    if (environment == "Development")
+    {
+        var swaggerUrl = $"{baseUrl}/swagger";
+        Console.WriteLine($"🚀 Opening Swagger: {swaggerUrl}");
+        
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = swaggerUrl,
+                    UseShellExecute = true
+                });
+                Console.WriteLine("✅ Swagger opened in browser!");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️  Could not open browser: {ex.Message}");
+            Console.WriteLine($"📋 Open manually: {swaggerUrl}");
+        }
+    }
+});
 
 app.Run();
