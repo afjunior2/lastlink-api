@@ -1,32 +1,31 @@
 ﻿using MediatR;
 using LastLinkApi.Application.Commands;
 using LastLinkApi.Domain.Entities;
-using LastLinkApi.Domain.Repositories;
 
 namespace LastLinkApi.Application.Handlers;
-
 public class CreateAdvanceRequestHandler : IRequestHandler<CreateAdvanceRequestCommand, AdvanceRequest>
 {
-    private readonly IAdvanceRequestRepository _repository;
+    private static int _nextId = 1;
+    private static readonly List<AdvanceRequest> _mockDatabase = new(); 
+    public static List<AdvanceRequest> GetMockDatabase() => _mockDatabase;
 
-    public CreateAdvanceRequestHandler(IAdvanceRequestRepository repository)
+    public Task<AdvanceRequest> Handle(CreateAdvanceRequestCommand request, CancellationToken cancellationToken)
     {
-        _repository = repository;
-    }
-
-    public async Task<AdvanceRequest> Handle(CreateAdvanceRequestCommand request, CancellationToken cancellationToken)
-    {
-        // Application rule validation
-        var hasPendingRequest = await _repository.HasPendingRequestAsync(request.CreatorId);
+        var hasPendingRequest = _mockDatabase.Any(r => 
+            r.CreatorId == request.CreatorId && 
+            r.Status == Domain.ValueObjects.RequestStatus.Pending);
+            
         if (hasPendingRequest)
         {
             throw new InvalidOperationException("Creator already has a pending request");
         }
 
-        // Entity creation (domain rules applied)
         var advanceRequest = new AdvanceRequest(request.CreatorId, request.RequestedAmount, request.RequestDate);
+        var idProperty = typeof(AdvanceRequest).GetProperty("Id");
+        idProperty?.SetValue(advanceRequest, _nextId++);
+        
+        _mockDatabase.Add(advanceRequest);
 
-        // Persistence
-        return await _repository.SaveAsync(advanceRequest);
+        return Task.FromResult(advanceRequest);
     }
 }

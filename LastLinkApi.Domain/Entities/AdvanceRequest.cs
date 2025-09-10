@@ -9,7 +9,7 @@ namespace LastLinkApi.Domain.Entities;
 /// </summary>
 public class AdvanceRequest
 {
-    public int Id { get; private set; }
+    public int Id { get; set; }
     public string CreatorId { get; private set; } = string.Empty;
     public decimal RequestedAmount { get; private set; }
     public DateTime RequestDate { get; private set; }

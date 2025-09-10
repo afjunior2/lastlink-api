@@ -4,15 +4,18 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LastLinkApi.Domain\LastLinkApi.Domain.csproj" />
     <ProjectReference Include="..\LastLinkApi.Application\LastLinkApi.Application.csproj" />
+    <ProjectReference Include="..\LastLinkApi.Domain\LastLinkApi.Domain.csproj" />
     <ProjectReference Include="..\LastLinkApi.Infrastructure\LastLinkApi.Infrastructure.csproj" />
   </ItemGroup>
 
