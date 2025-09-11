@@ -66,4 +66,10 @@ public class AdvanceRequestRepository : IAdvanceRequestRepository
             await _context.SaveChangesAsync();
         }
     }
+    
+    public async Task UpdateAsync(AdvanceRequest request)
+    {
+        _context.AdvanceRequests.Update(request);
+        await _context.SaveChangesAsync();
+    }
 }

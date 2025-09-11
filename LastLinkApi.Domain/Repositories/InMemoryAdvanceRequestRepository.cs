@@ -12,7 +12,7 @@ public class InMemoryAdvanceRequestRepository : IAdvanceRequestRepository
         var existing = _requests.FirstOrDefault(r => r.Id == request.Id);
         if (existing == null)
         {
-            request.Id = _requests.Count + 1; // auto-incremento simples
+            request.SetId(_requests.Count + 1);
             _requests.Add(request);
         }
         else
@@ -54,6 +54,23 @@ public class InMemoryAdvanceRequestRepository : IAdvanceRequestRepository
         if (request != null)
         {
             _requests.Remove(request);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateAsync(AdvanceRequest request)
+    {
+        var existing = _requests.FirstOrDefault(r => r.Id == request.Id);
+        if (existing != null)
+        {
+            // Chama o método da entidade para garantir consistência
+            existing.Update(
+                request.CreatorId,
+                request.RequestedAmount,
+                request.RequestDate,
+                request.Status
+            );
         }
 
         return Task.CompletedTask;

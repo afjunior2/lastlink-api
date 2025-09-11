@@ -15,4 +15,5 @@ public interface IAdvanceRequestRepository
     Task<bool> HasPendingRequestAsync(string creatorId);
     Task<IEnumerable<AdvanceRequest>> GetAllAsync();
     Task DeleteAsync(int id);
+    Task UpdateAsync(AdvanceRequest request);
 }

@@ -1,29 +1,28 @@
-﻿using MediatR;
-using LastLinkApi.Application.Commands;
+﻿using LastLinkApi.Application.Commands;
 using LastLinkApi.Domain.Entities;
 using LastLinkApi.Domain.Repositories;
+using MediatR;
 
-namespace LastLinkApi.Application.Handlers;
-
-public class ApproveAdvanceRequestHandler : IRequestHandler<ApproveAdvanceRequestCommand, AdvanceRequest>
+namespace LastLinkApi.Application.Handlers
 {
-    private readonly IAdvanceRequestRepository _repository;
-
-    public ApproveAdvanceRequestHandler(IAdvanceRequestRepository repository)
+    /// <summary>
+    /// Handles the approval of advance requests.
+    /// </summary>
+    public class ApproveAdvanceRequestHandler(IAdvanceRequestRepository repository)
+        : IRequestHandler<ApproveAdvanceRequestCommand, AdvanceRequest>
     {
-        _repository = repository;
-    }
-
-    public async Task<AdvanceRequest> Handle(ApproveAdvanceRequestCommand request, CancellationToken cancellationToken)
-    {
-        var advanceRequest = await _repository.GetByIdAsync(request.RequestId);
-        
-        if (advanceRequest == null)
+        public async Task<AdvanceRequest> Handle(ApproveAdvanceRequestCommand request, CancellationToken cancellationToken)
         {
-            throw new ArgumentException("Advance request not found");
-        }
+            var advanceRequest = await repository.GetByIdAsync(request.Id);
 
-        advanceRequest.Approve();
-        return await _repository.SaveAsync(advanceRequest);
+            if (advanceRequest == null)
+                throw new KeyNotFoundException($"Solicitação de antecipação com Id {request.Id} não foi encontrada.");
+
+            advanceRequest.Approve();
+
+            await repository.UpdateAsync(advanceRequest);
+
+            return advanceRequest;
+        }
     }
 }
