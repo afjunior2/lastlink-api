@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using LastLinkApi.Api.Middleware;
 using LastLinkApi.Infrastructure.Data;
 using LastLinkApi.Infrastructure.Repositories;
 using LastLinkApi.Infrastructure.Services;
@@ -152,6 +153,8 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseErrorHandling();
+
 app.MapControllers();
 
 // Health check
@@ -222,3 +225,4 @@ public class SwaggerConfig : Microsoft.Extensions.Options.IConfigureOptions<Swas
         }
     }
 }
+public partial class Program { }
