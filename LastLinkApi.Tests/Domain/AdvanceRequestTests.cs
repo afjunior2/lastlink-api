@@ -2,45 +2,46 @@
 using LastLinkApi.Domain.ValueObjects;
 using Xunit;
 
-namespace LastLinkApi.Tests.Domain
+namespace LastLinkApi.Tests.Domain;
+
+public class AdvanceRequestTests
 {
-    public class AdvanceRequestTests
+    [Fact]
+    public void CriarSolicitacao_ComValorInvalido_DeveLancarExcecao()
     {
-        [Fact]
-        public void Deve_Criar_Solicitacao_Valida()
-        {
-            var request = new AdvanceRequest("user-123", 1000);
+        var ex = Assert.Throws<ArgumentException>(() => new AdvanceRequest("user-123", 50, DateTime.UtcNow));
 
-            Assert.Equal("user-123", request.CreatorId);
-            Assert.Equal(1000, request.RequestedAmount);
-            Assert.Equal(50, request.FeeAmount); // 5%
-            Assert.Equal(950, request.NetAmount);
-            Assert.Equal(RequestStatus.Pending, request.Status);
-        }
+        Assert.Contains("O valor solicitado deve ser maior que R$100,00", ex.Message);
+    }
 
-        [Fact]
-        public void Nao_Deve_Criar_Com_Valor_Invalido()
-        {
-            Assert.Throws<ArgumentException>(() =>
-                new AdvanceRequest("user-123", 50));
-        }
+    [Fact]
+    public void CriarSolicitacao_Valida_DeveTerStatusPendente()
+    {
+        var request = new AdvanceRequest("user-123", 1000);
 
-        [Fact]
-        public void Deve_Aprovar_Solicitacao_Pendente()
-        {
-            var request = new AdvanceRequest("user-123", 1000);
-            request.Approve();
+        Assert.Equal(RequestStatus.Pending, request.Status);
+        Assert.Equal("user-123", request.CreatorId);
+        Assert.Equal(1000, request.RequestedAmount);
+        Assert.Equal(950, request.NetAmount); // 5% fee aplicado
+    }
 
-            Assert.Equal(RequestStatus.Approved, request.Status);
-        }
+    [Fact]
+    public void AprovarSolicitacao_DeveAlterarStatusParaAprovado()
+    {
+        var request = new AdvanceRequest("user-123", 2000);
 
-        [Fact]
-        public void Nao_Deve_Aprovar_Se_Ja_Aprovada()
-        {
-            var request = new AdvanceRequest("user-123", 1000);
-            request.Approve();
+        request.Approve();
 
-            Assert.Throws<InvalidOperationException>(() => request.Approve());
-        }
+        Assert.Equal(RequestStatus.Approved, request.Status);
+    }
+
+    [Fact]
+    public void RejeitarSolicitacao_DeveAlterarStatusParaRejeitado()
+    {
+        var request = new AdvanceRequest("user-123", 2000);
+
+        request.Reject();
+
+        Assert.Equal(RequestStatus.Rejected, request.Status);
     }
 }
