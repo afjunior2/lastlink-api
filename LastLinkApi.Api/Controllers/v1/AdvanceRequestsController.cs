@@ -66,4 +66,42 @@ public class AdvanceRequestsController(IMediator mediator, ILogger<AdvanceReques
         var simulation = await mediator.Send(query);
         return Ok(SimulationResponseDto.FromValueObject(simulation));
     }
+
+    [HttpGet]
+    public async Task<ActionResult<PagedAdvanceRequestsResponseDto>> GetAllAdvanceRequests([FromQuery] AdvanceRequestFilterDto filter)
+    {
+        var query = new GetAllAdvanceRequestsQuery(
+            filter.CreatorId,
+            filter.GetStatusEnum(),
+            filter.MinAmount,
+            filter.MaxAmount,
+            filter.StartDate,
+            filter.EndDate,
+            filter.SortBy,
+            filter.SortDirection,
+            filter.Page,
+            filter.PageSize
+        );
+
+        var result = await mediator.Send(query);
+
+        var totalPages = (int)Math.Ceiling((double)result.TotalRecords / result.PageSize);
+
+        var response = new PagedAdvanceRequestsResponseDto
+        {
+            Requests = result.Requests.Select(AdvanceRequestResponseDto.FromEntity),
+            CurrentPage = result.CurrentPage,
+            TotalPages = totalPages,
+            PageSize = result.PageSize,
+            TotalRecords = result.TotalRecords,
+            FilterSummary = new FilterSummaryDto
+            {
+                TotalRequests = result.TotalRecords,
+                FilteredRequests = result.TotalRecords,
+                AppliedFilters = result.AppliedFilters
+            }
+        };
+
+        return Ok(response);
+    }
 }
