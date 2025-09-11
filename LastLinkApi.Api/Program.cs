@@ -9,12 +9,17 @@ using LastLinkApi.Infrastructure.Repositories;
 using LastLinkApi.Infrastructure.Services;
 using LastLinkApi.Domain.Repositories;
 using LastLinkApi.Application.Handlers;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApiExplorer; // 👈 necessário para versioning no swagger
 
 var builder = WebApplication.CreateBuilder(args);
 var environment = builder.Environment.EnvironmentName;
 var appName = Assembly.GetExecutingAssembly().GetName().Name ?? "LastLinkApi";
 var appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
 
+// ========================================
+// LOG DE INICIALIZAÇÃO
+// ========================================
 Console.WriteLine("========================================");
 Console.WriteLine($"🚀 STARTING {appName.ToUpper()}");
 Console.WriteLine("========================================");
@@ -25,58 +30,31 @@ Console.WriteLine($"🕒 Started at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine($"💻 Machine: {Environment.MachineName}");
 Console.WriteLine("========================================");
 
-// Add services to the container
+// ========================================
+// SERVICES
+// ========================================
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
 
-// Swagger configuration
-builder.Services.AddSwaggerGen(c =>
+// API Versioning
+builder.Services.AddApiVersioning(options =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "LastLink API",
-        Version = "v1",
-        Description = $"Laslink API",
-        Contact = new OpenApiContact
-        {
-            Name = "LastLink Team",
-            Email = "dev@lastlink.com"
-        }
-    });
-
-    // Include XML comments
-    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    if (File.Exists(xmlPath))
-    {
-        c.IncludeXmlComments(xmlPath);
-    }
-
-    // JWT configuration
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference 
-                { 
-                    Type = ReferenceType.SecurityScheme, 
-                    Id = "Bearer" 
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
 });
+
+builder.Services.AddVersionedApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV"; // v1, v2...
+    options.SubstituteApiVersionInUrl = true;
+});
+
+// Explorer para Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Configura o Swagger para lidar com múltiplas versões
+builder.Services.ConfigureOptions<SwaggerConfig>();
 
 // Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -137,23 +115,27 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // ========================================
-// CONFIGURAÇÃO DO PIPELINE
+// PIPELINE
 // ========================================
-
 Console.WriteLine("📋 Configuring Swagger...");
 
-// Swagger (sempre habilitado)
-app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "LastLink API v1");
-    c.RoutePrefix = string.Empty; // Swagger na raiz
-    c.DocumentTitle = $"LastLink API Documentation (.NET 9) - {environment}";
-    c.DisplayRequestDuration();
-    c.EnableDeepLinking();
-    c.EnableFilter();
-});
+var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
 
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    foreach (var description in provider.ApiVersionDescriptions)
+    {
+        options.SwaggerEndpoint(
+            $"/swagger/{description.GroupName}/swagger.json",
+            $"LastLink API {description.GroupName.ToUpper()}");
+    }
+    options.RoutePrefix = string.Empty;
+    options.DocumentTitle = $"LastLink API Documentation (.NET 9) - {environment}";
+    options.DisplayRequestDuration();
+    options.EnableDeepLinking();
+    options.EnableFilter();
+});
 Console.WriteLine("✅ Swagger configured successfully!");
 
 // Database
@@ -179,7 +161,7 @@ app.MapGet("/health", () => new
     timestamp = DateTime.UtcNow,
     version = appVersion,
     dotnetVersion = "9.0",
-    environment = environment,
+    environment,
     machineName = Environment.MachineName
 });
 
@@ -193,7 +175,6 @@ app.MapPost("/auth/token", (JwtService jwtService, string userId) =>
 // ========================================
 // STARTUP FINAL
 // ========================================
-
 var urls = builder.Configuration["ASPNETCORE_URLS"] ?? "http://localhost:8080";
 Console.WriteLine($"🌐 URLs: {urls}" );
 
@@ -207,31 +188,37 @@ app.Lifetime.ApplicationStarted.Register(() =>
     Console.WriteLine($"❤️  Health Check: {baseUrl}/health");
     Console.WriteLine($"🔑 Auth Token: {baseUrl}/auth/token?userId=creator123");
     Console.WriteLine("========================================");
-    
-    // Abrir Swagger automaticamente em Development
-    if (environment == "Development")
-    {
-        var swaggerUrl = $"{baseUrl}/swagger";
-        Console.WriteLine($"🚀 Opening Swagger: {swaggerUrl}");
-        
-        try
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = swaggerUrl,
-                    UseShellExecute = true
-                });
-                Console.WriteLine("✅ Swagger opened in browser!");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"⚠️  Could not open browser: {ex.Message}");
-            Console.WriteLine($"📋 Open manually: {swaggerUrl}");
-        }
-    }
 });
 
 app.Run();
+
+// ========================================
+// CONFIGURAÇÃO EXTRA DO SWAGGER
+// ========================================
+public class SwaggerConfig : Microsoft.Extensions.Options.IConfigureOptions<Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions>
+{
+    private readonly IApiVersionDescriptionProvider _provider;
+
+    public SwaggerConfig(IApiVersionDescriptionProvider provider)
+    {
+        _provider = provider;
+    }
+
+    public void Configure(Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions options)
+    {
+        foreach (var description in _provider.ApiVersionDescriptions)
+        {
+            options.SwaggerDoc(description.GroupName, new OpenApiInfo
+            {
+                Title = "LastLink API",
+                Version = description.ApiVersion.ToString(),
+                Description = "API para gestão de solicitações de antecipação de recebíveis",
+                Contact = new OpenApiContact
+                {
+                    Name = "LastLink Team",
+                    Email = "dev@lastlink.com"
+                }
+            });
+        }
+    }
+}
